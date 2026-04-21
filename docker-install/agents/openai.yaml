@@ -1,4 +1,4 @@
 interface:
   display_name: "Docker Install"
-  short_description: "Install Docker Engine from docker/docker-install"
-  default_prompt: "Use $docker-install to install or verify Docker Engine using docker/docker-install."
+  short_description: "Install Docker Engine and NVIDIA GPU container support"
+  default_prompt: "Use $docker-install to install Docker Engine and configure NVIDIA GPU containers when available."

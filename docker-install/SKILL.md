@@ -1,6 +1,6 @@
 ---
 name: docker-install
-description: Install, set up, configure, verify, troubleshoot, update, reinstall, or remove Docker Engine on Linux or WSL Ubuntu using Docker's official docker/docker-install convenience-script repository. Use for any natural-language request about installing Docker, such as "install docker", "setup docker", "set up Docker Engine", "装 Docker", "安装 docker", "在 WSL 里装 docker", "给 Ubuntu 安装 Docker", "用 docker/docker-install 装 Docker", "get.docker.com", "Docker CE on WSL", or quick Docker Engine setup. Avoid for Docker Desktop-only setup unless comparing alternatives or the user explicitly wants Desktop instead of Engine inside WSL/Linux.
+description: Install, set up, configure, verify, troubleshoot, update, reinstall, or remove Docker Engine on Linux or WSL Ubuntu using Docker's official docker/docker-install convenience-script repository. Use for any natural-language request about installing Docker, such as "install docker", "setup docker", "set up Docker Engine", "装 Docker", "安装 docker", "在 WSL 里装 docker", "给 Ubuntu 安装 Docker", "用 docker/docker-install 装 Docker", "get.docker.com", "Docker CE on WSL", or quick Docker Engine setup. If an NVIDIA GPU is detected in Linux or WSL, also install and configure NVIDIA Container Toolkit for Docker GPU containers unless the user opts out. Avoid for Docker Desktop-only setup unless comparing alternatives or the user explicitly wants Desktop instead of Engine inside WSL/Linux.
 ---
 
 # Docker Install
@@ -105,14 +105,70 @@ On WSL, also check Windows-side visibility only if the user expects Windows tool
 
 ## GPU Containers
 
-The `docker/docker-install` script installs Docker Engine; it does not configure NVIDIA GPU container runtime by itself. If the user needs `docker run --gpus all`, first verify WSL can see the GPU:
+The `docker/docker-install` script installs Docker Engine; it does not configure NVIDIA GPU container runtime by itself. If an NVIDIA GPU is detected, or the user needs `docker run --gpus all`, install NVIDIA Container Toolkit using NVIDIA's official install guide:
+
+- NVIDIA Container Toolkit install guide: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html
+- CUDA on WSL guide: https://docs.nvidia.com/cuda/wsl-user-guide/index.html
+
+First verify Linux or WSL can see the GPU:
 
 ```bash
 nvidia-smi
 ls -l /dev/dxg
 ```
 
-Then install/configure NVIDIA Container Toolkit using the current NVIDIA documentation for the distro. After that, verify with an NVIDIA CUDA container that matches the user's driver/runtime needs.
+On WSL, do not install a Linux NVIDIA display driver. The CUDA on WSL guide says the Windows NVIDIA driver is the driver WSL uses, and Linux driver packages inside WSL can break the mapped driver setup.
+
+For Ubuntu/Debian with apt, use the official NVIDIA package repository:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y --no-install-recommends ca-certificates curl gnupg2
+
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
+  | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+
+curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
+  | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
+  | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+sudo apt-get update
+apt-cache madison nvidia-container-toolkit | sed -n '1,10p'
+sudo apt-get install -y nvidia-container-toolkit
+```
+
+Configure Docker and restart it:
+
+```bash
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
+```
+
+If systemd is not available, restart Docker with the distro's service command:
+
+```bash
+sudo service docker restart
+```
+
+Verify that Docker sees the NVIDIA runtime and can pass the GPU through:
+
+```bash
+docker info | sed -n '/Runtimes:/,/Default Runtime:/p'
+docker run --rm --gpus all nvidia/cuda:12.6.3-base-ubuntu24.04 nvidia-smi
+```
+
+Expected indicators:
+
+- `docker info` includes `nvidia` in `Runtimes`.
+- The CUDA container prints `nvidia-smi` output showing the host GPU.
+- `/etc/docker/daemon.json` contains a `runtimes.nvidia.path` value of `nvidia-container-runtime`.
+
+Installation notes from real WSL setup:
+
+- NVIDIA's official `nvidia-container-toolkit` package installed version `1.19.0-1` with `libnvidia-container1`, `libnvidia-container-tools`, and `nvidia-container-toolkit-base`.
+- `nvidia-ctk runtime configure --runtime=docker` creates or updates `/etc/docker/daemon.json`, then Docker must be restarted.
+- Docker Hub pulls can intermittently fail with `EOF` or `TLS handshake timeout`; retry before changing configuration.
+- Avoid `set -o pipefail` with `apt-cache madison nvidia-container-toolkit | head -10`; `head` can close the pipe early and abort the script. Use `sed -n '1,10p'` instead.
 
 ## Troubleshooting
 
