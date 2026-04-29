@@ -1,0 +1,4 @@
+interface:
+  display_name: "WSL Chrome IME"
+  short_description: "Install Google Chrome in WSL and make Chinese input work in WSLg"
+  default_prompt: "Use $wsl-chrome-ime to install Google Chrome in WSL2 Ubuntu and configure Chinese input in WSLg with fcitx5."
